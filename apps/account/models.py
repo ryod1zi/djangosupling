@@ -1,45 +1,43 @@
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import BaseUserManager
 
-class UserManager(BaseUserManager):
-    use_in_migrations = True
-
-    def _create_user(self, email, password, **kwargs):
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
         if not email:
-            return ValueError('Email is required!!')
-        email = self.normalize_email(email=email)
-        user = self.model(email=email, **kwargs)
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
         user.set_password(password)
-        user.save()
+        user.save(using=self._db)
         return user
-    
-    def create_user(self, email, password, **kwargs):
-        kwargs.setdefault('is_staff', False)
-        kwargs.setdefault('is_superuser', False)
-        return self._create_user(email, password, **kwargs)
-    
-    def create_superuser(self, email, password, **kwargs):
-        kwargs.setdefault('is_staff', True)
-        kwargs.setdefault('is_superuser', True)
-        kwargs.setdefault('is_active', True)
-        return self._create_user(email, password, **kwargs)
 
-class CustomUser(AbstractUser):
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self.create_user(email, password, **extra_fields)
+
+class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
-    password = models.CharField(max_length=20)
-    activation_code = models.CharField(max_length=255, blank=True)
-    username = models.CharField(max_length=100, blank=True)
-    first_name = models.CharField(max_length=30)
-    last_name = models.CharField(max_length=30)
-    avatar = models.ImageField(upload_to='avatars/', blank=True)
-    is_active = models.BooleanField(default=False)
-    phone_number = models.CharField(max_length=25, blank=True, null=True, unique=True)
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    date_joined = models.DateTimeField(auto_now_add=True)
+    profile = models.CharField(
+        max_length=20,
+        choices=[('customer', 'Customer'), ('employee', 'Employee'), ('business', 'Business')],
+        default='customer'
+    )
+    objects = CustomUserManager()
 
-    objects = UserManager()
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
-    
 
-    def __str__(self) -> str:
+    def __str__(self):
         return self.email
